@@ -36,7 +36,10 @@ from flask import (
     render_template,
     request,
     Response,
+    current_app,
+    session
 )
+from flask_login import login_user
 from flask_appbuilder import expose
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder.security.decorators import has_access, has_access_api
@@ -161,7 +164,6 @@ DATABASE_KEYS = [
     "force_ctas_schema",
     "id",
 ]
-
 
 DATASOURCE_MISSING_ERR = __("The data source seems to have been deleted")
 USER_MISSING_ERR = __("The user seems to have been deleted")
@@ -317,12 +319,12 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
         requests = (
             session.query(DAR)
-            .filter(
+                .filter(
                 DAR.datasource_id == datasource_id,
                 DAR.datasource_type == datasource_type,
                 DAR.created_by_fk == requested_by.id,
             )
-            .all()
+                .all()
         )
 
         if not requests:
@@ -612,13 +614,13 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             and slc
             and g.user in slc.owners
             and (
-                not form_data.get("time_range_endpoints")
-                or form_data["time_range_endpoints"]
-                != (
-                    utils.TimeRangeEndpoint.INCLUSIVE,
-                    utils.TimeRangeEndpoint.EXCLUSIVE,
-                )
+            not form_data.get("time_range_endpoints")
+            or form_data["time_range_endpoints"]
+            != (
+                utils.TimeRangeEndpoint.INCLUSIVE,
+                utils.TimeRangeEndpoint.EXCLUSIVE,
             )
+        )
         ):
             url = Href("/superset/explore/")(
                 {
@@ -784,7 +786,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         Those should not be saved when saving the chart"""
         return [f for f in filters if not f.get("isExtra")]
 
-    def save_or_overwrite_slice(  # pylint: disable=too-many-arguments,too-many-locals,no-self-use
+    def save_or_overwrite_slice(
+        # pylint: disable=too-many-arguments,too-many-locals,no-self-use
         self,
         slc: Optional[Slice],
         slice_add_perm: bool,
@@ -835,8 +838,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             dash = cast(
                 Dashboard,
                 db.session.query(Dashboard)
-                .filter_by(id=int(save_to_dashboard_id))
-                .one(),
+                    .filter_by(id=int(save_to_dashboard_id))
+                    .one(),
             )
             # check edit dashboard permissions
             dash_overwrite_perm = check_ownership(dash, raise_if_false=False)
@@ -1122,8 +1125,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             if db_name:
                 existing_database = (
                     db.session.query(models.Database)
-                    .filter_by(database_name=db_name)
-                    .one_or_none()
+                        .filter_by(database_name=db_name)
+                        .one_or_none()
                 )
                 if existing_database and uri == existing_database.safe_sqlalchemy_uri():
                     uri = existing_database.sqlalchemy_uri_decrypted
@@ -1195,16 +1198,17 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
         qry = (
             db.session.query(models.Log, models.Dashboard, Slice)
-            .outerjoin(models.Dashboard, models.Dashboard.id == models.Log.dashboard_id)
-            .outerjoin(Slice, Slice.id == models.Log.slice_id)
-            .filter(
+                .outerjoin(models.Dashboard,
+                           models.Dashboard.id == models.Log.dashboard_id)
+                .outerjoin(Slice, Slice.id == models.Log.slice_id)
+                .filter(
                 and_(
                     ~models.Log.action.in_(("queries", "shortner", "sql_json")),
                     models.Log.user_id == user_id,
                 )
             )
-            .order_by(models.Log.dttm.desc())
-            .limit(limit)
+                .order_by(models.Log.dttm.desc())
+                .limit(limit)
         )
         payload = []
         for log in qry.all():
@@ -1264,7 +1268,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
     ) -> FlaskResponse:
         qry = (
             db.session.query(Dashboard, models.FavStar.dttm)
-            .join(
+                .join(
                 models.FavStar,
                 and_(
                     models.FavStar.user_id == int(user_id),
@@ -1272,7 +1276,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                     Dashboard.id == models.FavStar.obj_id,
                 ),
             )
-            .order_by(models.FavStar.dttm.desc())
+                .order_by(models.FavStar.dttm.desc())
         )
         payload = []
         for o in qry.all():
@@ -1299,12 +1303,12 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         Dash = Dashboard
         qry = (
             db.session.query(Dash)
-            .filter(
+                .filter(
                 or_(  # pylint: disable=comparison-with-callable
                     Dash.created_by_fk == user_id, Dash.changed_by_fk == user_id
                 )
             )
-            .order_by(Dash.changed_on.desc())
+                .order_by(Dash.changed_on.desc())
         )
         payload = [
             {
@@ -1332,13 +1336,13 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
         owner_ids_query = (
             db.session.query(Slice.id)
-            .join(Slice.owners)
-            .filter(security_manager.user_model.id == user_id)
+                .join(Slice.owners)
+                .filter(security_manager.user_model.id == user_id)
         )
 
         qry = (
             db.session.query(Slice, FavStar.dttm)
-            .join(
+                .join(
                 models.FavStar,
                 and_(
                     models.FavStar.user_id == user_id,
@@ -1347,7 +1351,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                 ),
                 isouter=True,
             )
-            .filter(
+                .filter(
                 or_(
                     Slice.id.in_(owner_ids_query),
                     Slice.created_by_fk == user_id,
@@ -1355,7 +1359,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                     FavStar.user_id == user_id,
                 )
             )
-            .order_by(Slice.slice_name.asc())
+                .order_by(Slice.slice_name.asc())
         )
         payload = [
             {
@@ -1382,8 +1386,9 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             user_id = g.user.id
         qry = (
             db.session.query(Slice)
-            .filter(or_(Slice.created_by_fk == user_id, Slice.changed_by_fk == user_id))
-            .order_by(Slice.changed_on.desc())
+                .filter(
+                or_(Slice.created_by_fk == user_id, Slice.changed_by_fk == user_id))
+                .order_by(Slice.changed_on.desc())
         )
         payload = [
             {
@@ -1409,7 +1414,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             user_id = g.user.id
         qry = (
             db.session.query(Slice, models.FavStar.dttm)
-            .join(
+                .join(
                 models.FavStar,
                 and_(
                     models.FavStar.user_id == user_id,
@@ -1417,7 +1422,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                     Slice.id == models.FavStar.obj_id,
                 ),
             )
-            .order_by(models.FavStar.dttm.desc())
+                .order_by(models.FavStar.dttm.desc())
         )
         payload = []
         for o in qry.all():
@@ -1473,8 +1478,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         elif table_name and db_name:
             table = (
                 session.query(SqlaTable)
-                .join(models.Database)
-                .filter(
+                    .join(models.Database)
+                    .filter(
                     models.Database.database_name == db_name
                     or SqlaTable.table_name == table_name
                 )
@@ -1490,8 +1495,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                 )
             slices = (
                 session.query(Slice)
-                .filter_by(datasource_id=table.id, datasource_type=table.type)
-                .all()
+                    .filter_by(datasource_id=table.id, datasource_type=table.type)
+                    .all()
             )
 
         result = []
@@ -1539,8 +1544,9 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         count = 0
         favs = (
             session.query(FavStar)
-            .filter_by(class_name=class_name, obj_id=obj_id, user_id=g.user.get_id())
-            .all()
+                .filter_by(class_name=class_name, obj_id=obj_id,
+                           user_id=g.user.get_id())
+                .all()
         )
         if action == "select":
             if not favs:
@@ -1755,8 +1761,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             return json_error_response(err_msg)
         cluster = (
             db.session.query(DruidCluster)
-            .filter_by(cluster_name=cluster_name)
-            .one_or_none()
+                .filter_by(cluster_name=cluster_name)
+                .one_or_none()
         )
         if not cluster:
             err_msg = __(
@@ -1791,8 +1797,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         database_id = data["dbId"]
         table = (
             db.session.query(SqlaTable)
-            .filter_by(database_id=database_id, table_name=table_name)
-            .one_or_none()
+                .filter_by(database_id=database_id, table_name=table_name)
+                .one_or_none()
         )
         if not table:
             # Create table if doesn't exist.
@@ -1829,8 +1835,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             return json_error_response("Database not found", status=400)
         table = (
             db.session.query(SqlaTable)
-            .filter_by(database_id=database_id, table_name=table_name)
-            .one_or_none()
+                .filter_by(database_id=database_id, table_name=table_name)
+                .one_or_none()
         )
         if not table:
             table = SqlaTable(table_name=table_name, owners=[g.user])
@@ -2051,7 +2057,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
     @has_access_api
     @expose("/validate_sql_json/", methods=["POST", "GET"])
     @event_logger.log_this
-    def validate_sql_json(  # pylint: disable=too-many-locals,too-many-return-statements,no-self-use
+    def validate_sql_json(
+        # pylint: disable=too-many-locals,too-many-return-statements,no-self-use
         self,
     ) -> FlaskResponse:
         """Validates that arbitrary sql is acceptable for the given database.
@@ -2461,10 +2468,10 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
         sql_queries = (
             db.session.query(Query)
-            .filter(
+                .filter(
                 Query.user_id == g.user.get_id(), Query.changed_on >= last_updated_dt
             )
-            .all()
+                .all()
         )
         dict_queries = {q.client_id: q.to_dict() for q in sql_queries}
         return json_success(json.dumps(dict_queries, default=utils.json_int_dttm_ser))
@@ -2551,8 +2558,8 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
         welcome_dashboard_id = (
             db.session.query(UserAttribute.welcome_dashboard_id)
-            .filter_by(user_id=g.user.get_id())
-            .scalar()
+                .filter_by(user_id=g.user.get_id())
+                .scalar()
         )
         if welcome_dashboard_id:
             return self.dashboard(str(welcome_dashboard_id))
@@ -2599,16 +2606,16 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         # send list of tab state ids
         tabs_state = (
             db.session.query(TabState.id, TabState.label)
-            .filter_by(user_id=user_id)
-            .all()
+                .filter_by(user_id=user_id)
+                .all()
         )
         tab_state_ids = [str(tab_state[0]) for tab_state in tabs_state]
         # return first active tab, or fallback to another one if no tab is active
         active_tab = (
             db.session.query(TabState)
-            .filter_by(user_id=user_id)
-            .order_by(TabState.active.desc())
-            .first()
+                .filter_by(user_id=user_id)
+                .order_by(TabState.active.desc())
+                .first()
         )
 
         databases: Dict[int, Any] = {}
@@ -2625,9 +2632,9 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
             # return all user queries associated with existing SQL editors
             user_queries = (
                 db.session.query(Query)
-                .filter_by(user_id=user_id)
-                .filter(Query.sql_editor_id.in_(tab_state_ids))
-                .all()
+                    .filter_by(user_id=user_id)
+                    .filter(Query.sql_editor_id.in_(tab_state_ids))
+                    .all()
             )
             queries = {
                 query.client_id: dict(query.to_dict().items()) for query in user_queries
@@ -2696,3 +2703,42 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
                 "Failed to fetch schemas allowed for csv upload in this database! "
                 "Please contact your Superset Admin!"
             )
+
+    @staticmethod
+    def get_auth_cookies(user: "User") -> Dict[str, str]:
+        # Login with the user specified to get the reports
+        from werkzeug.http import parse_cookie
+        with current_app.test_request_context("/login"):
+            login_user(user)
+            # A mock response object to get the cookie information from
+            response = Response()
+            current_app.session_interface.save_session(current_app, session, response)
+
+        cookies = {}
+
+        # Grab any "set-cookie" headers from the login response
+        for name, value in response.headers:
+            if name.lower() == "set-cookie":
+                # This yields a MultiDict, which is ordered -- something like
+                # MultiDict([('session', 'value-we-want), ('HttpOnly', ''), etc...
+                # Therefore, we just need to grab the first tuple and add it to our
+                # final dict
+                cookie = parse_cookie(value)
+                cookie_tuple = list(cookie.items())[0]
+                cookies[cookie_tuple[0]] = cookie_tuple[1]
+
+        return cookies
+
+    @expose("/mylogin", methods=["POST"])
+    def override_role_permissions(self) -> FlaskResponse:
+        data = json.loads(str(request.data, encoding="utf-8"))
+        username = data["username"]
+        password = data['password']
+
+        user = self.appbuilder.sm.auth_user_db(username, password)
+        if user:
+            login_user(user, remember=False)
+            cookies = self.get_auth_cookies(user)
+
+        set_cookies = 'session=' + cookies.get('session') + '; Path=/; SameSite=Lax'
+        return set_cookies
