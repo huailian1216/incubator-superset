@@ -735,7 +735,7 @@ class ChartRestApi(BaseSupersetModelRestApi):
 
                 dash_tree.create_node(slice.slice_name, slice.id,
                                       parent=parent_id if slice.parent_id else 'ungrouped',
-                                      data={'type': 'dashboard', 'id': slice.id,
+                                      data={'type': 'slice', 'id': slice.id,
                                             'title': slice.slice_name,
                                             'operationVisible': False, 'expand': True})
 

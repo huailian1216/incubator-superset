@@ -583,7 +583,7 @@ class DatasetRestApi(BaseSupersetModelRestApi):
 
                 dash_tree.create_node(dash.table_name, dash.id,
                                       parent=parent_id if dash.parent_id else 'ungrouped',
-                                      data={'type': 'dashboard', 'id': dash.id,
+                                      data={'type': 'datasets', 'id': dash.id,
                                             'title': dash.table_name,
                                             'operationVisible': False, 'expand': True})
 
