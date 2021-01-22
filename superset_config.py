@@ -41,6 +41,7 @@ CORS_OPTIONS = {
 # Flask-WTF flag for CSRF
 WTF_CSRF_ENABLED = False
 WTF_CSRF_EXEMPT_LIST = ["superset.views.core.log", "superset.charts.api.data", "superset.views.core.explore_json"]
+WTF_CSRF_TIME_LIMIT = None
 
 #
 # Flask session cookie options
