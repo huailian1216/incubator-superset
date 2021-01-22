@@ -77,6 +77,7 @@ def copy_dashboard(
     template = session.query(Dashboard).filter_by(id=int(dashboard_id)).first()
     dashboard = Dashboard(
         dashboard_title=template.dashboard_title,
+        parent_id=template.parent_id,
         position_json=template.position_json,
         description=template.description,
         css=template.css,
@@ -134,6 +135,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
     slices = relationship("Slice", secondary=dashboard_slices, backref="dashboards")
     owners = relationship(security_manager.user_model, secondary=dashboard_user)
     published = Column(Boolean, default=False)
+    parent_id = Column(String(100))
 
     export_fields = [
         "dashboard_title",
@@ -237,6 +239,7 @@ class Dashboard(  # pylint: disable=too-many-instance-attributes
             "slug": self.slug,
             "slices": [slc.data for slc in self.slices],
             "position_json": positions,
+            "parent_id": self.parent_id
         }
 
     @property  # type: ignore

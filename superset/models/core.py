@@ -142,6 +142,7 @@ class Database(
     encrypted_extra = Column(EncryptedType(Text, config["SECRET_KEY"]), nullable=True)
     impersonate_user = Column(Boolean, default=False)
     server_cert = Column(EncryptedType(Text, config["SECRET_KEY"]), nullable=True)
+    parent_id = Column(String(100))
     export_fields = [
         "database_name",
         "sqlalchemy_uri",

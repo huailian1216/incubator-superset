@@ -14,11 +14,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+
+import os
+import json
+import uuid
+import pickle
+
 import logging
 from typing import Any
 
 import yaml
-from flask import g, request, Response
+from flask import g, request, Response, make_response
 from flask_appbuilder.api import expose, protect, rison, safe
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_babel import ngettext
@@ -60,6 +66,9 @@ from superset.views.filters import FilterRelatedOwners
 
 logger = logging.getLogger(__name__)
 
+BASE_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+DATASET_TREE_FILE_PATH = os.path.join(BASE_DIR, "static", 'tree_structure', "dataset_tree.pkl")
+
 
 class DatasetRestApi(BaseSupersetModelRestApi):
     datamodel = SQLAInterface(SqlaTable)
@@ -75,6 +84,7 @@ class DatasetRestApi(BaseSupersetModelRestApi):
         "bulk_delete",
         "refresh",
         "related_objects",
+        "tree_structure"
     }
     list_columns = [
         "id",
@@ -553,3 +563,100 @@ class DatasetRestApi(BaseSupersetModelRestApi):
             return self.response_403()
         except DatasetBulkDeleteFailedError as ex:
             return self.response_422(message=str(ex))
+
+
+    @expose("/tree_structure/", methods=["GET", "POST", 'PUT', 'DELETE'])
+    # @protect()
+    @safe
+    @statsd_metrics
+    def tree_structure(self, **kwargs: Any) -> Response:
+        if request.method == 'GET':
+            with open(DATASET_TREE_FILE_PATH, 'rb') as f_read:
+                dash_tree = pickle.load(f_read)
+
+            for dash in self.datamodel.session.query(SqlaTable).all():
+                # 检查 parent_id 是否正确
+                if dash.parent_id and dash_tree.contains(dash.parent_id):
+                    parent_id = dash.parent_id
+                else:
+                    parent_id = 'ungrouped'
+
+                dash_tree.create_node(dash.table_name, dash.id,
+                                      parent=parent_id if dash.parent_id else 'ungrouped',
+                                      data={'type': 'dashboard', 'id': dash.id,
+                                            'title': dash.table_name,
+                                            'operationVisible': False, 'expand': True})
+
+            resp = make_response(dash_tree.to_list(with_data=True), 200)
+            resp.headers["Content-Disposition"] = generate_download_headers("json")[
+                "Content-Disposition"
+            ]
+            return resp
+        elif request.method == 'POST':  # 新建节点
+            form_data = request.json
+            title = form_data.get('title')
+            type = form_data.get('type')
+            parent_id = form_data.get('parent_id')
+
+            if type == 'folder':
+                with open(DATASET_TREE_FILE_PATH, 'rb') as f_read:
+                    dash_tree = pickle.load(f_read)
+
+                # 同一级下 不能重名
+                if title in [x.tag for x in dash_tree.children(parent_id)]:
+                    return self.response(400, result='名称重复.')
+
+                id = str(uuid.uuid4())
+                dash_tree.create_node(title, id, parent=parent_id,
+                                      data={'type': type, 'id': id, 'title': title,
+                                            'operationVisible': False, 'expand': True})
+
+                with open(DATASET_TREE_FILE_PATH, 'wb') as f_w:
+                    pickle.dump(dash_tree, f_w)
+
+                return self.response(200, id=id, result='ok')
+        elif request.method == 'PUT':  # 更新节点
+            form_data = request.json
+            title = form_data.get('title')
+            id = form_data.get('id')
+
+            if id in ['dustbin', 'ungrouped', 'dataset_root']:
+                return self.response(400, result='该目录不可修改.')
+
+            with open(DATASET_TREE_FILE_PATH, 'rb') as f_read:
+                dash_tree = pickle.load(f_read)
+
+            dash_tree[id].tag = title
+
+            with open(DATASET_TREE_FILE_PATH, 'wb') as f_w:
+                pickle.dump(dash_tree, f_w)
+
+            return self.response(200, result='ok')
+
+        elif request.method == 'DELETE':  # 删除节点
+            form_data = request.json
+            id = form_data.get('id')
+
+            if id in ['dustbin', 'ungrouped', 'dataset_root']:
+                return self.response(400, result='该目录不可删除.')
+
+            with open(DATASET_TREE_FILE_PATH, 'rb') as f_read:
+                dash_tree = pickle.load(f_read)
+
+            if not dash_tree.contains(id):
+                return self.response(400, result='id 不存在.')
+
+            remove_nodes = dash_tree.remove_subtree(id)
+
+            remove_nodes_id_list = list(remove_nodes.nodes.keys())
+
+            with open(DATASET_TREE_FILE_PATH, 'wb') as f_w:
+                pickle.dump(dash_tree, f_w)
+
+            # 更新 数据库 看板表
+            self.datamodel.session.query(SqlaTable).filter(
+                SqlaTable.parent_id in remove_nodes_id_list).update({
+                'parent_id': 'dustbin'
+            })
+
+            return self.response(200, result='ok')

@@ -70,6 +70,11 @@ class DatasetPostSchema(Schema):
     schema = fields.String(validate=Length(0, 250))
     table_name = fields.String(required=True, allow_none=False, validate=Length(1, 250))
     owners = fields.List(fields.Integer())
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
+    )
 
 
 class DatasetPutSchema(Schema):
@@ -88,6 +93,11 @@ class DatasetPutSchema(Schema):
     owners = fields.List(fields.Integer())
     columns = fields.List(fields.Nested(DatasetColumnsPutSchema))
     metrics = fields.List(fields.Nested(DatasetMetricsPutSchema))
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
+    )
 
 
 class DatasetRelatedChart(Schema):

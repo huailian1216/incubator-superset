@@ -506,7 +506,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
     @event_logger.log_this
     @api
-    @has_access_api
+    # @has_access_api
     @handle_api_exception
     @expose(
         "/explore_json/<datasource_type>/<int:datasource_id>/",
@@ -525,7 +525,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
         `self.generate_json` receives this input and returns different
         payloads based on the request args in the first block
 
-        TODO: break into one endpoint for each return shape"""
+        TODO: break into one endpoint for each return shape  jiang"""
         response_type = utils.ChartDataResultFormat.JSON.value
         responses: List[
             Union[utils.ChartDataResultFormat, utils.ChartDataResultType]
@@ -1040,6 +1040,7 @@ class Superset(BaseSupersetView):  # pylint: disable=too-many-public-methods
 
         dash.owners = [g.user] if g.user else []
         dash.dashboard_title = data["dashboard_title"]
+        dash.parent_id = data["parent_id"]
 
         old_to_new_slice_ids: Dict[int, int] = {}
         if data["duplicate_slices"]:

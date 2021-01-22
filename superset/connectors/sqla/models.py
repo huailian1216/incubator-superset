@@ -470,6 +470,7 @@ class SqlaTable(  # pylint: disable=too-many-public-methods,too-many-instance-at
     sql = Column(Text)
     is_sqllab_view = Column(Boolean, default=False)
     template_params = Column(Text)
+    parent_id = Column(String(100))
 
     baselink = "tablemodelview"
 

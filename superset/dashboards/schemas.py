@@ -139,6 +139,11 @@ class DashboardPostSchema(BaseDashboardSchema):
         description=json_metadata_description, validate=validate_json_metadata,
     )
     published = fields.Boolean(description=published_description)
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
+    )
 
 
 class DashboardPutSchema(BaseDashboardSchema):
@@ -163,3 +168,9 @@ class DashboardPutSchema(BaseDashboardSchema):
         validate=validate_json_metadata,
     )
     published = fields.Boolean(description=published_description, allow_none=True)
+
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
+    )

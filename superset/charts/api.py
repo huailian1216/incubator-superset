@@ -14,7 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+import os
 import json
+import uuid
+import pickle
 import logging
 from typing import Any, Dict
 
@@ -70,6 +73,9 @@ from superset.views.filters import FilterRelatedOwners
 
 logger = logging.getLogger(__name__)
 
+BASE_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+CHAR_TREE_FILE_PATH = os.path.join(BASE_DIR, "static", 'tree_structure', "slice_tree.pkl")
+
 
 class ChartRestApi(BaseSupersetModelRestApi):
     datamodel = SQLAInterface(Slice)
@@ -83,6 +89,7 @@ class ChartRestApi(BaseSupersetModelRestApi):
         "bulk_delete",  # not using RouteMethod since locally defined
         "data",
         "viz_types",
+        "tree_structure"
     }
     class_permission_name = "SliceModelView"
     show_columns = [
@@ -709,3 +716,99 @@ class ChartRestApi(BaseSupersetModelRestApi):
         return Response(
             FileWrapper(screenshot), mimetype="image/png", direct_passthrough=True
         )
+
+    @expose("/tree_structure/", methods=["GET", "POST", 'PUT', 'DELETE'])
+    # @protect()
+    @safe
+    @statsd_metrics
+    def tree_structure(self, **kwargs: Any) -> Response:
+        if request.method == 'GET':
+            with open(CHAR_TREE_FILE_PATH, 'rb') as f_read:
+                dash_tree = pickle.load(f_read)
+
+            for slice in self.datamodel.session.query(Slice).all():
+                # 检查 parent_id 是否正确
+                if slice.parent_id and dash_tree.contains(slice.parent_id):
+                    parent_id = slice.parent_id
+                else:
+                    parent_id = 'ungrouped'
+
+                dash_tree.create_node(slice.slice_name, slice.id,
+                                      parent=parent_id if slice.parent_id else 'ungrouped',
+                                      data={'type': 'dashboard', 'id': slice.id,
+                                            'title': slice.slice_name,
+                                            'operationVisible': False, 'expand': True})
+
+            resp = make_response(dash_tree.to_list(with_data=True), 200)
+            resp.headers["Content-Disposition"] = generate_download_headers("json")[
+                "Content-Disposition"
+            ]
+            return resp
+        elif request.method == 'POST':  # 新建节点
+            form_data = request.json
+            title = form_data.get('title')
+            type = form_data.get('type')
+            parent_id = form_data.get('parent_id')
+
+            if type == 'folder':
+                with open(CHAR_TREE_FILE_PATH, 'rb') as f_read:
+                    dash_tree = pickle.load(f_read)
+
+                # 同一级下 不能重名
+                if title in [x.tag for x in dash_tree.children(parent_id)]:
+                    return self.response(400, result='名称重复.')
+
+                id = str(uuid.uuid4())
+                dash_tree.create_node(title, id, parent=parent_id,
+                                      data={'type': type, 'id': id, 'title': title,
+                                            'operationVisible': False, 'expand': True})
+
+                with open(CHAR_TREE_FILE_PATH, 'wb') as f_w:
+                    pickle.dump(dash_tree, f_w)
+
+                return self.response(200, id=id, result='ok')
+        elif request.method == 'PUT':  # 更新节点
+            form_data = request.json
+            title = form_data.get('title')
+            id = form_data.get('id')
+
+            if id in ['dustbin', 'ungrouped', 'slice_root']:
+                return self.response(400, result='该目录不可修改.')
+
+            with open(CHAR_TREE_FILE_PATH, 'rb') as f_read:
+                dash_tree = pickle.load(f_read)
+
+            dash_tree[id].tag = title
+
+            with open(CHAR_TREE_FILE_PATH, 'wb') as f_w:
+                pickle.dump(dash_tree, f_w)
+
+            return self.response(200, result='ok')
+
+        elif request.method == 'DELETE':  # 删除节点
+            form_data = request.json
+            id = form_data.get('id')
+
+            if id in ['dustbin', 'ungrouped', 'slice_root']:
+                return self.response(400, result='该目录不可删除.')
+
+            with open(CHAR_TREE_FILE_PATH, 'rb') as f_read:
+                dash_tree = pickle.load(f_read)
+
+            if not dash_tree.contains(id):
+                return self.response(400, result='id 不存在.')
+
+            remove_nodes = dash_tree.remove_subtree(id)
+
+            remove_nodes_id_list = list(remove_nodes.nodes.keys())
+
+            with open(CHAR_TREE_FILE_PATH, 'wb') as f_w:
+                pickle.dump(dash_tree, f_w)
+
+            # 更新 数据库 看板表
+            self.datamodel.session.query(Slice).filter(
+                Slice.parent_id in remove_nodes_id_list).update({
+                'parent_id': 'dustbin'
+            })
+
+            return self.response(200, result='ok')

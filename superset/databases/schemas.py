@@ -249,6 +249,11 @@ class DatabasePostSchema(Schema):
         required=True,
         validate=[Length(1, 1024), sqlalchemy_uri_validator],
     )
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
+    )
 
 
 class DatabasePutSchema(Schema):
@@ -288,6 +293,11 @@ class DatabasePutSchema(Schema):
         description=sqlalchemy_uri_description,
         allow_none=True,
         validate=[Length(0, 1024), sqlalchemy_uri_validator],
+    )
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
     )
 
 

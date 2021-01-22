@@ -155,6 +155,11 @@ class ChartPostSchema(Schema):
         description=datasource_name_description, allow_none=True
     )
     dashboards = fields.List(fields.Integer(description=dashboards_description))
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
+    )
 
 
 class ChartPutSchema(Schema):
@@ -186,6 +191,11 @@ class ChartPutSchema(Schema):
         allow_none=True,
     )
     dashboards = fields.List(fields.Integer(description=dashboards_description))
+    parent_id = fields.String(
+        description="",
+        allow_none=True,
+        validate=Length(0, 50),
+    )
 
 
 class ChartGetDatasourceObjectDataResponseSchema(Schema):
